@@ -1,50 +1,54 @@
 package com.example.task3.entity;
 
-import com.example.task3.config.HospitalConfigurator;
-import com.example.task3.config.HospitalConfigurator.HospitalConfig;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class Hospital {
-    private static final CountDownLatch LATCH = new CountDownLatch(1);
-    private static final AtomicBoolean INITIALIZED = new AtomicBoolean(false);
+    private static final Logger logger = LogManager.getLogger();
+
+    private static final CountDownLatch latch = new CountDownLatch(1);
+    private static final AtomicBoolean initialized = new AtomicBoolean(false);
     private static Hospital instance;
 
     private final List<Ward> wards;
     private final Pharmacy pharmacy;
 
     private Hospital() {
-        HospitalConfig config = HospitalConfigurator.getConfig();
+        wards = List.of(
+                new Ward(1),
+                new Ward(2),
+                new Ward(3)
+        );
 
-        wards = config.wards();
-        pharmacy = config.pharmacy();
+        pharmacy = new Pharmacy(1, 0);
     }
 
     public static Hospital getInstance() {
-        if (LATCH.getCount() == 0) {
+        if (latch.getCount() == 0) {
             return instance;
         }
 
-        if (INITIALIZED.compareAndSet(false, true)) {
+        if (initialized.compareAndSet(false, true)) {
             instance = new Hospital();
-            LATCH.countDown();
+            latch.countDown();
         }
 
         try {
-            LATCH.await();
+            latch.await();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new RuntimeException("Thread interrupted", e);
+            logger.error("Thread interrupted", e);
         }
 
         return instance;
     }
 
     public List<Ward> getWards() {
-        return Collections.unmodifiableList(wards);
+        return wards;
     }
 
     public Pharmacy getPharmacy() {

@@ -1,21 +1,54 @@
 package com.example.task3.entity;
 
-public class Pharmacy {
-    private int currentMedicationAmount;
+import java.util.Objects;
 
-    public Pharmacy(int initialMedicationAmount) {
-        currentMedicationAmount = initialMedicationAmount;
+public class Pharmacy {
+    private final int id;
+    private int medicationAmount;
+
+    public Pharmacy(int id, int medicationAmount) {
+        this.id = id;
+        this.medicationAmount = medicationAmount;
     }
 
-    public boolean hasMedication() {
-        return currentMedicationAmount > 0;
+    public void restockMedication(int medicationAmount) {
+        this.medicationAmount += medicationAmount;
     }
 
     public void fetchMedication() {
-        currentMedicationAmount--;
+        this.medicationAmount--;
     }
 
-    public void restockMedication(int amount) {
-        currentMedicationAmount += amount;
+    public boolean hasMedication() {
+        return medicationAmount > 0;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, medicationAmount);
+    }
+
+    @Override
+    public boolean equals(Object object) {
+        if (this == object) {
+            return true;
+        }
+
+        if (object == null) {
+            return false;
+        }
+
+        if (getClass() != object.getClass()) {
+            return false;
+        }
+
+        Pharmacy other = (Pharmacy) object;
+
+        return this.id == other.id && this.medicationAmount == other.medicationAmount;
+    }
+
+    @Override
+    public String toString() {
+        return "Pharmacy{%d:%d}".formatted(id, medicationAmount);
     }
 }

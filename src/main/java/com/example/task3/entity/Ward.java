@@ -1,47 +1,70 @@
 package com.example.task3.entity;
 
-import java.util.Optional;
+import java.util.Objects;
 
 public class Ward {
     private final int id;
-    private Patient currentPatient = null;
+    private boolean isOccupied = false;
+    private boolean isReserved = false;
 
     public Ward(int id) {
         this.id = id;
     }
 
-    public boolean admit(Patient patient) {
-        if (isOccupied()) {
-            return false;
-        }
-
-        currentPatient = patient;
-
-        return true;
+    public boolean isReserved() {
+        return isReserved;
     }
 
-    public boolean discharge() {
-        if (isOccupied()) {
-            currentPatient = null;
-            return true;
-        }
+    public void reserve() {
+        this.isReserved = true;
+    }
 
-        return false;
+    public void unreserve() {
+        this.isReserved = false;
     }
 
     public boolean isOccupied() {
-        return currentPatient != null;
+        return isOccupied;
     }
 
-    public Optional<Patient> getPatient() {
-        if (isOccupied()) {
-            return Optional.of(currentPatient);
-        }
+    public void admitPatient() {
+        isOccupied = true;
+    }
 
-        return Optional.empty();
+    public void dischargePatient() {
+        isOccupied = false;
     }
 
     public int getId() {
         return id;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, isOccupied, isReserved);
+    }
+
+    @Override
+    public boolean equals(Object object) {
+        if (this == object) {
+            return true;
+        }
+
+        if (object == null) {
+            return false;
+        }
+
+        if (getClass() != object.getClass()) {
+            return false;
+        }
+
+        Ward other = (Ward) object;
+
+        return this.id == other.id && this.isOccupied == other.isOccupied && this.isReserved == other.isReserved;
+    }
+
+    @Override
+    public String toString() {
+        return "Ward{%d}".formatted(id);
     }
 }

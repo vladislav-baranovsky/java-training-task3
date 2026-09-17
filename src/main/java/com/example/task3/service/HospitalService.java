@@ -4,97 +4,111 @@ import com.example.task3.entity.Hospital;
 import com.example.task3.entity.Patient;
 import com.example.task3.entity.Pharmacy;
 import com.example.task3.entity.Ward;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class HospitalService {
-    private final Hospital hospital;
+    private static final Logger logger = LogManager.getLogger();
 
-    private final Map<Integer, ReentrantLock> wardLocks = new ConcurrentHashMap<>();
-    private final Map<Integer, Ward> occupiedWards = new ConcurrentHashMap<>();
+    private final ReentrantLock hospitalLock = new ReentrantLock(true);
+    private final Condition wardAvailableCondition = hospitalLock.newCondition();
 
-    private final ReentrantLock admissionLock = new ReentrantLock();
-    private final Condition wardAvailableCondition = admissionLock.newCondition();
-
-    private final ReentrantLock pharmacyLock = new ReentrantLock();
+    private final ReentrantLock pharmacyLock = new ReentrantLock(true);
     private final Condition medicationAvailableCondition = pharmacyLock.newCondition();
 
-    public HospitalService(Hospital hospital) {
-        this.hospital = hospital;
+    public HospitalService() {
     }
 
-    public void processPatient(Patient patient) {
+    public void treatPatient(Patient patient) {
+        Hospital hospital = Hospital.getInstance();
         Ward assignedWard = null;
 
-        admissionLock.lock();
+        hospitalLock.lock();
         try {
-            while (true) {
+            while (assignedWard == null) {
                 for (Ward ward : hospital.getWards()) {
-                    if (occupiedWards.putIfAbsent(ward.getId(), ward) == null) {
+                    if (!ward.isReserved()) {
+                        ward.reserve();
                         assignedWard = ward;
+                        logger.debug("Ward {} has been reserved", ward);
                         break;
                     }
                 }
 
-                if (assignedWard != null) {
-                    break;
+                if (assignedWard == null) {
+                    wardAvailableCondition.await();
                 }
-
-                wardAvailableCondition.await();
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return; //todo rethrow?
+            logger.error("Thread interrupted", e);
+            return;
         } finally {
-            admissionLock.unlock();
+            hospitalLock.unlock();
         }
 
-        ReentrantLock assignedWardLock = wardLocks.computeIfAbsent(assignedWard.getId(), _ -> new ReentrantLock());
-        assignedWardLock.lock();
+        patient.admitToWard(assignedWard);
+        logger.debug("Patient {} admitted", patient);
         try {
-            assignedWard.admit(patient);
+            TimeUnit.MILLISECONDS.sleep(200);
 
             pharmacyLock.lock();
             try {
                 Pharmacy pharmacy = hospital.getPharmacy();
                 while (!pharmacy.hasMedication()) {
+                    logger.debug("Waiting for medication");
                     medicationAvailableCondition.await();
                 }
                 pharmacy.fetchMedication();
+                TimeUnit.MILLISECONDS.sleep(200);
             } finally {
                 pharmacyLock.unlock();
             }
 
-            TimeUnit.SECONDS.sleep(2);
+            logger.debug("Starting treatment of patient {}", patient);
+            patient.startTreatment();
+            TimeUnit.MILLISECONDS.sleep(200);
 
-            assignedWard.discharge();
-            occupiedWards.remove(assignedWard.getId());
+            logger.debug("Completing treatment of patient {}", patient);
+            patient.completeTreatment();
+            TimeUnit.MILLISECONDS.sleep(200);
+
+            logger.debug("Discharging patient {}", patient);
+            patient.discharge();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            assignedWard.discharge();
-            occupiedWards.remove(assignedWard.getId());
+            logger.error("Thread interrupted", e);
+            return;
         } finally {
-            assignedWardLock.unlock();
+            hospitalLock.lock();
+            try {
+                assignedWard.unreserve();
+                wardAvailableCondition.signalAll();
+            } finally {
+                hospitalLock.unlock();
+            }
         }
 
-        admissionLock.lock();
+        hospitalLock.lock();
         try {
             wardAvailableCondition.signalAll();
         } finally {
-            admissionLock.unlock();
+            hospitalLock.unlock();
         }
     }
 
-    public void restockMedication(int amount) {
+    public void restockMedicine(int medicationAmount) {
+        Pharmacy pharmacy = Hospital.getInstance()
+                .getPharmacy();
+
         pharmacyLock.lock();
         try {
-            Pharmacy pharmacy = hospital.getPharmacy();
-
-            pharmacy.restockMedication(amount);
+            logger.debug("Restocking medication with {} units", medicationAmount);
+            pharmacy.restockMedication(medicationAmount);
             medicationAvailableCondition.signalAll();
         } finally {
             pharmacyLock.unlock();
